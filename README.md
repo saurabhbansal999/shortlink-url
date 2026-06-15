@@ -73,6 +73,8 @@ Visit [http://localhost:8000](http://localhost:8000)
 php artisan test
 ```
 
+> Note: Test cases were written with the help of AI (Claude). I had no prior experience writing tests and used it as a learning aid to understand how feature tests work in Laravel.
+
 ---
 
 ## Roles
