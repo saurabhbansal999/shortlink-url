@@ -9,13 +9,13 @@ use Illuminate\Support\Str;
 
 beforeEach(function () {
     DB::table('roles')->insert([
-        ['id' => Role::SUPERADMIN,     'ulid' => (string) Str::ulid(), 'name' => 'Super Admin',    'slug' => 'super-admin'],
-        ['id' => Role::COMPANY_ADMIN,  'ulid' => (string) Str::ulid(), 'name' => 'Company Admin',   'slug' => 'company-admin'],
-        ['id' => Role::COMPANY_MEMBER, 'ulid' => (string) Str::ulid(), 'name' => 'Company Member',  'slug' => 'company-member'],
+        ['id' => Role::SUPERADMIN,     'ulid' => (string) Str::ulid(), 'name' => 'Super Admin',   'slug' => 'super-admin'],
+        ['id' => Role::COMPANY_ADMIN,  'ulid' => (string) Str::ulid(), 'name' => 'Company Admin',  'slug' => 'company-admin'],
+        ['id' => Role::COMPANY_MEMBER, 'ulid' => (string) Str::ulid(), 'name' => 'Company Member', 'slug' => 'company-member'],
     ]);
 });
 
-// ─── Creation restrictions ────────────────────────────────────────────────────
+// creation restrictions
 
 test('super admin cannot create a short url', function () {
     $superAdmin = User::factory()->create(['role_id' => Role::SUPERADMIN]);
@@ -43,7 +43,7 @@ test('company member cannot create a short url', function () {
         ->assertForbidden();
 });
 
-// ─── Listing access ───────────────────────────────────────────────────────────
+// listing access
 
 test('super admin sees all short urls across every company', function () {
     $companyA = Company::factory()->create();
@@ -109,7 +109,7 @@ test('company member only sees their own short urls', function () {
         );
 });
 
-// ─── Public redirect ──────────────────────────────────────────────────────────
+// public redirect
 
 test('a short url publicly redirects to the original url', function () {
     $company = Company::factory()->create();

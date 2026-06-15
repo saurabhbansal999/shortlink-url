@@ -15,11 +15,4 @@ class ShortUrlFactory extends Factory
             'short_code'   => null,
         ];
     }
-
-    public function shortened(): static
-    {
-        return $this->state(fn () => [
-            'short_code' => $this->faker->unique()->lexify('??????'),
-        ]);
-    }
 }

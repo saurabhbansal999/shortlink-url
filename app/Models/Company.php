@@ -17,7 +17,7 @@ class Company extends Model
         'company_phone'
     ];
 
-    protected static function boot()
+    protected static function boot(): void
     {
         parent::boot();
 
