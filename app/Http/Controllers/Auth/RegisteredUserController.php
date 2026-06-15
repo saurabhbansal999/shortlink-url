@@ -10,8 +10,6 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\URL;
 use Illuminate\Validation\Rules;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -21,20 +19,33 @@ class RegisteredUserController extends Controller
 {
     public function create(Request $request): Response|RedirectResponse
     {
-        if (!$request->hasValidSignature()) {
+        $inviteEmail = $request->query('invite_email');
+
+        if ($inviteEmail) {
+            if (!$request->hasValidSignature()) {
+                return Inertia::render('Auth/Register', ['linkExpired' => true]);
+            }
+
+            // Persist the invite email in session so it survives validation-error redirects
+            session(['pending_invite' => $inviteEmail]);
+        } else {
+            $inviteEmail = session('pending_invite');
+        }
+
+        if (!$inviteEmail) {
             return Inertia::render('Auth/Register');
         }
 
-        $inviteEmail = $request->query('invite_email');
-        $user        = User::where('email', $inviteEmail)->with('company')->first();
+        $user = User::where('email', $inviteEmail)->with('company')->first();
 
         if ($user?->email_verified_at) {
+            session()->forget('pending_invite');
             return redirect()->route('login')
                 ->with('status', 'This invitation link has already been used. Please log in.');
         }
 
         $needsCompanySetup = $user?->role_id === Role::COMPANY_ADMIN
-            && $user->company->users()
+            && $user->company?->users()
                 ->where('role_id', Role::COMPANY_ADMIN)
                 ->whereNotNull('email_verified_at')
                 ->doesntExist();
@@ -45,17 +56,16 @@ class RegisteredUserController extends Controller
             'companyName'       => $user?->company?->company_name,
             'companyEmail'      => $user?->company?->company_email,
             'companyPhone'      => $user?->company?->company_phone,
-            'inviteUrl'         => $request->fullUrl(),
             'showCompanyFields' => $needsCompanySetup,
         ]);
     }
 
     public function store(Request $request): RedirectResponse
     {
-        $inviteUrl = $request->input('invite_url');
-        $isInvite  = $inviteUrl && URL::hasValidSignature(Request::create($inviteUrl));
+        // Accept invite_email from the form field or session (set when the link was first opened)
+        $inviteEmail = $request->input('invite_email') ?: session('pending_invite');
 
-        if (!$isInvite) {
+        if (!$inviteEmail) {
             $request->validate([
                 'name'     => 'required|string|max:255',
                 'email'    => 'required|string|lowercase|email|max:255|unique:' . User::class,
@@ -65,7 +75,7 @@ class RegisteredUserController extends Controller
             $user = User::create([
                 'name'     => $request->name,
                 'email'    => $request->email,
-                'password' => Hash::make($request->password),
+                'password' => $request->password,
             ]);
 
             event(new Registered($user));
@@ -74,18 +84,20 @@ class RegisteredUserController extends Controller
             return redirect(route('dashboard', absolute: false));
         }
 
-        $user = User::where('email', $request->input('invite_email'))->with('company')->first();
+        $user = User::where('email', $inviteEmail)->with('company')->first();
 
         if (!$user) {
+            session()->forget('pending_invite');
             throw ValidationException::withMessages(['invite_email' => 'Invalid invitation.']);
         }
 
         if ($user->email_verified_at) {
+            session()->forget('pending_invite');
             throw ValidationException::withMessages(['invite_email' => 'This invitation has already been used.']);
         }
 
         $needsCompanySetup = $user->role_id === Role::COMPANY_ADMIN
-            && $user->company->users()
+            && $user->company?->users()
                 ->where('role_id', Role::COMPANY_ADMIN)
                 ->whereNotNull('email_verified_at')
                 ->doesntExist();
@@ -94,7 +106,7 @@ class RegisteredUserController extends Controller
             $request->validate([
                 'company_name'  => 'required|string|max:255',
                 'company_email' => 'required|email|unique:companies,company_email,' . $user->company->id,
-                'company_phone' => 'nullable|numeric|unique:companies,company_phone,' . $user->company->id,
+                'company_phone' => 'nullable|string|max:20|unique:companies,company_phone,' . $user->company->id,
                 'name'          => 'required|string|max:255',
                 'email'         => 'required|string|lowercase|email|max:255|unique:users,email,' . $user->id,
                 'password'      => ['required', 'confirmed', Rules\Password::defaults()],
@@ -110,7 +122,7 @@ class RegisteredUserController extends Controller
                 $user->update([
                     'name'              => $request->name,
                     'email'             => $request->email,
-                    'password'          => Hash::make($request->password),
+                    'password'          => $request->password,
                     'email_verified_at' => now(),
                 ]);
             });
@@ -124,11 +136,12 @@ class RegisteredUserController extends Controller
             $user->update([
                 'name'              => $request->name,
                 'email'             => $request->email,
-                'password'          => Hash::make($request->password),
+                'password'          => $request->password,
                 'email_verified_at' => now(),
             ]);
         }
 
+        session()->forget('pending_invite');
         event(new Registered($user->fresh()));
         Auth::login($user->fresh());
 

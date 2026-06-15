@@ -37,7 +37,7 @@ class CompanyController extends Controller
         $request->validate([
             'name'  => 'required|string',
             'email' => 'required|email|unique:companies,company_email|unique:users,email',
-            'phone' => 'nullable|numeric|unique:companies,company_phone',
+            'phone' => 'nullable|string|max:20|unique:companies,company_phone',
         ]);
 
         DB::transaction(function () use ($request) {
